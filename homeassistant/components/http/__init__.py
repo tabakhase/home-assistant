@@ -460,9 +460,10 @@ class RequestDataValidator:
     Will return a 400 if no JSON provided or doesn't match schema.
     """
 
-    def __init__(self, schema):
+    def __init__(self, schema, allow_empty=False):
         """Initialize the decorator."""
         self._schema = schema
+        self._allow_empty = allow_empty
 
     def __call__(self, method):
         """Decorate a function."""
@@ -470,11 +471,15 @@ class RequestDataValidator:
         @wraps(method)
         def wrapper(view, request, *args, **kwargs):
             """Wrap a request handler with data validation."""
+            data = None
             try:
                 data = yield from request.json()
             except ValueError:
-                _LOGGER.error('Invalid JSON received.')
-                return view.json_message('Invalid JSON.', 400)
+                if not self._allow_empty or \
+                   (yield from request.content.read()) != b'':
+                    _LOGGER.error('Invalid JSON received.')
+                    return view.json_message('Invalid JSON.', 400)
+                data = {}
 
             try:
                 kwargs['data'] = self._schema(data)

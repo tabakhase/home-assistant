@@ -83,6 +83,7 @@ TEST_REQUIREMENTS = (
     'sqlalchemy',
     'statsd',
     'uvcclient',
+    'voluptuous-serialize',
     'warrant',
     'yahoo-finance',
     'pythonwhois',
