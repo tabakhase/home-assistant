@@ -238,7 +238,6 @@ class ConfigEntry:
             'title': self.title,
             'data': self.data,
             'source': self.source,
-            'state': self.state,
         }
 
 
