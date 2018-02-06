@@ -4,13 +4,113 @@ The Config Manager allows for creating config entries to be consumed by
 components. Each entry is created via a Config Flow Handler, as defined by each
 component.
 
-During startup, Home Assistant will setup each component for which config
-entries are available. It will first call the normal setup and then call
-the method `async_setup_entry(hass, entry)` for each entry. The same method is
-called when Home Assistant is running and a config entry is created.
+During startup, Home Assistant will setup the entries during the normal setup
+of a component. It will first call the normal setup and then call the method
+`async_setup_entry(hass, entry)` for each entry. The same method is called when
+Home Assistant is running while a config entry is created.
 
-When a config flow is started for a domain, Home Assistant will make sure to
-load all dependencies and install the requirements.
+## Config Flows
+
+A component needs to define a Config Handler to allow the user to create config
+entries for that component. A config flow will manage the creation of entries
+from user input, discovery or other sources (like hassio).
+
+When a config flow is started for a domain, the handler will be instantiated
+and receives a unique id. The instance of this handler will be reused for every
+interaction of the user with this flow. This makes it possible to store
+instance variables on the handler.
+
+Before instantiating the handler, Home Assistant will make sure to load all
+dependencies and install the requirements of the component.
+
+At a minimum, each config flow will have to define a version number, a
+voluptuous schema for the data it wants to store in the entry and the 'init'
+step.
+
+    @config_entries.HANDLERS.register(DOMAIN)
+    class ExampleConfigFlow(config_entries.ConfigFlowHandler):
+
+        VERSION = 1
+        ENTRY_SCHEMA = vol.Schema({ … })
+
+        async def async_step_init(self, user_input=None):
+            …
+
+The 'init' step is the first step of a flow and is called when a user
+starts a new flow. Each step has three different possible results: "Show Form",
+"Abort" and "Create Entry".
+
+### Show Form
+
+This will show a form to the user to fill in. You define the current step,
+a title, a description and the schema of the data that needs to be returned.
+
+    async def async_step_init(self, user_input=None):
+        # Use OrderedDict to guarantee order of the form shown to the user
+        data_schema = OrderedDict()
+        data_schema[vol.Required('username')] = str
+        data_schema[vol.Required('password')] = str
+
+        return self.async_show_form(
+            step_id='init',
+            title='Account Info',
+            data_schema=vol.Schema(data_schema)
+        )
+
+After the user has filled in the form, the step method will be called again and
+the user input is passed in. If the validation of the user input fails , you
+can return a dictionary with errors. Each key in the dictionary refers to a
+field name that contains the error. Use the key 'base' if you want to show a
+generic error.
+
+    async def async_step_init(self, user_input=None):
+        errors = None
+        if user_input is not None:
+            # Validate user input
+            if valid:
+                return self.create_entry(…)
+
+            errors['base'] = 'Unable to reach authentication server.'
+
+        return self.async_show_form(…)
+
+If the user input passes validation, you can again return one of the three
+return values. If you want to navigate the user to the next step, return the
+return value of that step:
+
+    return (await self.async_step_account())
+
+### Abort
+
+When the result is "Abort", a message will be shown to the user and the
+configuration flow is finished.
+
+    return self.async_abort(
+        reason='This device is not supported by Home Assistant.'
+    )
+
+### Create Entry
+
+When the result is "Create Entry", an entry will be created and stored in Home
+Assistant, a success message is shown to the user and the flow is finished.
+
+## Initializing a config flow from an external source
+
+You might want to initialize a config flow programmatically. For example, if
+we discover a device on the network that requires user interaction to finish
+setup. To do so, pass a source parameter and optional user input to the init
+step:
+
+    await hass.config_entries.flow.async_init(
+        'hue', source='discovery', data=discovery_info)
+
+The config flow handler will need to add a step to support the source. The step
+should follow the same return values as a normal step.
+
+    async def async_step_discovery(info):
+
+If the result of the step is to show a form, the user will be able to continue
+the flow from the config panel.
 """
 import asyncio
 import logging
@@ -45,6 +145,7 @@ RESULT_TYPE_ABORT = 'abort'
 ENTRY_STATE_LOADED = 'loaded'
 ENTRY_STATE_SETUP_ERROR = 'setup_error'
 ENTRY_STATE_NOT_LOADED = 'not_loaded'
+ENTRY_STATE_FAILED_UNLOAD = 'failed_unload'
 
 
 class ConfigEntry:
@@ -89,6 +190,7 @@ class ConfigEntry:
             if not isinstance(result, bool):
                 _LOGGER.error('%s.async_config_entry did not return boolean',
                               self.domain)
+                result = False
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception('Error setting up entry %s for %s',
                               self.title, self.domain)
@@ -114,10 +216,17 @@ class ConfigEntry:
 
         try:
             result = yield from component.async_unload_entry(hass, self)
+
+            if not isinstance(result, bool):
+                _LOGGER.error('%s.async_unload_entry did not return boolean',
+                              self.domain)
+                result = False
+
             return result
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception('Error unloading entry %s for %s',
                               self.title, self.domain)
+            self.state = ENTRY_STATE_FAILED_UNLOAD
             return False
 
     def as_dict(self):
@@ -162,7 +271,7 @@ class ConfigEntries:
     def __init__(self, hass, hass_config):
         """Initialize the entry manager."""
         self.hass = hass
-        self.flow = FlowManager(hass, hass_config)
+        self.flow = FlowManager(hass, hass_config, self._async_add_entry)
         self._hass_config = hass_config
         self._entries = None
         self._sched_save = None
@@ -186,27 +295,6 @@ class ConfigEntries:
         if domain is None:
             return list(self._entries)
         return [entry for entry in self._entries if entry.domain == domain]
-
-    @asyncio.coroutine
-    def async_add_entry(self, entry):
-        """Add an entry."""
-        handler = yield from self.flow.async_get_handler(entry.domain)
-
-        # Raises vol.Invalid if data does not conform schema
-        handler.ENTRY_SCHEMA(entry.data)
-
-        self._entries.append(entry)
-        self._async_schedule_save()
-
-        # Setup entry
-        if entry.domain in self.hass.config.components:
-            # Component already set up, just need to call setup_entry
-            yield from entry.async_setup(self.hass)
-        else:
-            # Setting up component will also load the entries
-            self.hass.async_add_job(
-                async_setup_component, self.hass, entry.domain,
-                self._hass_config)
 
     @asyncio.coroutine
     def async_remove(self, entry_id):
@@ -240,6 +328,22 @@ class ConfigEntries:
         entries = yield from self.hass.async_add_job(load_json, path)
         self._entries = [ConfigEntry(**entry) for entry in entries]
 
+    @asyncio.coroutine
+    def _async_add_entry(self, entry):
+        """Add an entry."""
+        self._entries.append(entry)
+        self._async_schedule_save()
+
+        # Setup entry
+        if entry.domain in self.hass.config.components:
+            # Component already set up, just need to call setup_entry
+            yield from entry.async_setup(self.hass)
+        else:
+            # Setting up component will also load the entries
+            self.hass.async_add_job(
+                async_setup_component, self.hass, entry.domain,
+                self._hass_config)
+
     @callback
     def _async_schedule_save(self):
         """Schedule saving the entity registry."""
@@ -263,34 +367,12 @@ class ConfigEntries:
 class FlowManager:
     """Manage all the config flows that are in progress."""
 
-    def __init__(self, hass, hass_config):
+    def __init__(self, hass, hass_config, async_add_entry):
         """Initialize the config manager."""
         self.hass = hass
         self._hass_config = hass_config
         self._progress = {}
-
-    @asyncio.coroutine
-    def async_get_handler(self, domain, *, resolve_reqs_deps=False):
-        """Get the handler for a specific domain."""
-        handler = HANDLERS.get(domain)
-
-        if handler is not None:
-            return handler
-
-        # This will load the component and thus register the handler
-        component = getattr(self.hass.components, domain)
-
-        handler = HANDLERS.get(domain)
-
-        if handler is None:
-            raise self.hass.helpers.UnknownHandler
-
-        if resolve_reqs_deps:
-            # Make sure requirements and dependencies of component are resolved
-            yield from async_process_deps_reqs(
-                self.hass, self._hass_config, domain, component)
-
-        return handler
+        self._async_add_entry = async_add_entry
 
     @callback
     def async_progress(self):
@@ -304,8 +386,19 @@ class FlowManager:
     @asyncio.coroutine
     def async_init(self, domain, *, source=SOURCE_USER, data=None):
         """Start a configuration flow."""
-        handler = yield from self.async_get_handler(
-            domain, resolve_reqs_deps=True)
+        handler = HANDLERS.get(domain)
+
+        if handler is None:
+            # This will load the component and thus register the handler
+            component = getattr(self.hass.components, domain)
+            handler = HANDLERS.get(domain)
+
+            if handler is None:
+                raise self.hass.helpers.UnknownHandler
+
+            # Make sure requirements and dependencies of component are resolved
+            yield from async_process_deps_reqs(
+                self.hass, self._hass_config, domain, component)
 
         flow_id = uuid.uuid4().hex
         flow = self._progress[flow_id] = handler()
@@ -370,14 +463,19 @@ class FlowManager:
         if result['type'] == RESULT_TYPE_ABORT:
             return result
 
+        data = result.pop('data')
+
+        # Raises vol.Invalid if data does not conform schema
+        flow.ENTRY_SCHEMA(data)  # pylint: disable=no-member
+
         entry = ConfigEntry(
             version=flow.VERSION,
             domain=flow.domain,
             title=result['title'],
-            data=result.pop('data'),
+            data=data,
             source=flow.source
         )
-        yield from self.hass.config_entries.async_add_entry(entry)
+        yield from self._async_add_entry(entry)
         return result
 
 
@@ -391,7 +489,8 @@ class ConfigFlowHandler:
     cur_step = None
 
     # Set by dev
-    VERSION = 0
+    # VERSION
+    # ENTRY_SCHEMA
 
     @callback
     def async_show_form(self, *, title, step_id, description=None,

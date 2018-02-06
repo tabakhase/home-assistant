@@ -102,6 +102,7 @@ def test_add_entry_calls_setup_entry(hass, manager):
 
     class TestFlow(config_entries.ConfigFlowHandler):
 
+        VERSION = 1
         ENTRY_SCHEMA = vol.Schema({
             'token': str
         })
@@ -250,6 +251,7 @@ def test_configure_reuses_handler_instance(manager):
 def test_configure_two_steps(manager):
     """Test that we reuse instances."""
     class TestFlow(config_entries.ConfigFlowHandler):
+        VERSION = 1
         ENTRY_SCHEMA = vol.Schema(list)
 
         @asyncio.coroutine

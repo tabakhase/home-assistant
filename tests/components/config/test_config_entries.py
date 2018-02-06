@@ -159,6 +159,7 @@ def test_abort(hass, client):
 def test_create_account(hass, client):
     """Test a flow that creates an account."""
     class TestFlow(ConfigFlowHandler):
+        VERSION = 1
         ENTRY_SCHEMA = vol.Schema({
             'secret': str
         })
@@ -187,6 +188,7 @@ def test_create_account(hass, client):
 def test_two_step_flow(hass, client):
     """Test we can finish a two step flow."""
     class TestFlow(ConfigFlowHandler):
+        VERSION = 1
         ENTRY_SCHEMA = vol.Schema({
             'secret': str
         })
