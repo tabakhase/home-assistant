@@ -103,9 +103,6 @@ def test_add_entry_calls_setup_entry(hass, manager):
     class TestFlow(config_entries.ConfigFlowHandler):
 
         VERSION = 1
-        ENTRY_SCHEMA = vol.Schema({
-            'token': str
-        })
 
         @asyncio.coroutine
         def async_step_init(self, user_input=None):
@@ -157,9 +154,6 @@ def test_saving_and_loading(hass):
     """Test that we're saving and loading correctly."""
     class TestFlow(config_entries.ConfigFlowHandler):
         VERSION = 5
-        ENTRY_SCHEMA = vol.Schema({
-            'token': str
-        })
 
         @asyncio.coroutine
         def async_step_init(self, user_input=None):
@@ -175,9 +169,6 @@ def test_saving_and_loading(hass):
 
     class Test2Flow(config_entries.ConfigFlowHandler):
         VERSION = 3
-        ENTRY_SCHEMA = vol.Schema({
-            'username': str
-        })
 
         @asyncio.coroutine
         def async_step_init(self, user_input=None):
@@ -252,7 +243,6 @@ def test_configure_two_steps(manager):
     """Test that we reuse instances."""
     class TestFlow(config_entries.ConfigFlowHandler):
         VERSION = 1
-        ENTRY_SCHEMA = vol.Schema(list)
 
         @asyncio.coroutine
         def async_step_init(self, user_input=None):
@@ -357,7 +347,6 @@ def test_create_saves_data(manager):
     """Test creating a config entry."""
     class TestFlow(config_entries.ConfigFlowHandler):
         VERSION = 5
-        ENTRY_SCHEMA = vol.Schema(str)
 
         @asyncio.coroutine
         def async_step_init(self, user_input=None):
@@ -384,10 +373,6 @@ def test_discovery_init_flow(manager):
     """Test a flow initialized by discovery."""
     class TestFlow(config_entries.ConfigFlowHandler):
         VERSION = 5
-        ENTRY_SCHEMA = vol.Schema({
-            'id': str,
-            'token': str
-        })
 
         @asyncio.coroutine
         def async_step_discovery(self, info):

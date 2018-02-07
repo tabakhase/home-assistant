@@ -45,10 +45,6 @@ class ExampleConfigFlow(config_entries.ConfigFlowHandler):
     """Handle an example configuration flow."""
 
     VERSION = 1
-    ENTRY_SCHEMA = vol.Schema({
-        'name': str,
-        'object_id': str,
-    })
 
     def __init__(self):
         """Initialize a Hue config handler."""

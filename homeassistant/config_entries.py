@@ -23,15 +23,13 @@ instance variables on the handler.
 Before instantiating the handler, Home Assistant will make sure to load all
 dependencies and install the requirements of the component.
 
-At a minimum, each config flow will have to define a version number, a
-voluptuous schema for the data it wants to store in the entry and the 'init'
-step.
+At a minimum, each config flow will have to define a version number and the
+'init' step.
 
     @config_entries.HANDLERS.register(DOMAIN)
     class ExampleConfigFlow(config_entries.ConfigFlowHandler):
 
         VERSION = 1
-        ENTRY_SCHEMA = vol.Schema({ … })
 
         async def async_step_init(self, user_input=None):
             …
@@ -461,16 +459,11 @@ class FlowManager:
         if result['type'] == RESULT_TYPE_ABORT:
             return result
 
-        data = result.pop('data')
-
-        # Raises vol.Invalid if data does not conform schema
-        flow.ENTRY_SCHEMA(data)  # pylint: disable=no-member
-
         entry = ConfigEntry(
             version=flow.VERSION,
             domain=flow.domain,
             title=result['title'],
-            data=data,
+            data=result.pop('data'),
             source=flow.source
         )
         yield from self._async_add_entry(entry)
@@ -488,7 +481,6 @@ class ConfigFlowHandler:
 
     # Set by dev
     # VERSION
-    # ENTRY_SCHEMA
 
     @callback
     def async_show_form(self, *, title, step_id, description=None,

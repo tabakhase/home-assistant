@@ -160,9 +160,6 @@ def test_create_account(hass, client):
     """Test a flow that creates an account."""
     class TestFlow(ConfigFlowHandler):
         VERSION = 1
-        ENTRY_SCHEMA = vol.Schema({
-            'secret': str
-        })
 
         @asyncio.coroutine
         def async_step_init(self, user_input=None):
@@ -189,9 +186,6 @@ def test_two_step_flow(hass, client):
     """Test we can finish a two step flow."""
     class TestFlow(ConfigFlowHandler):
         VERSION = 1
-        ENTRY_SCHEMA = vol.Schema({
-            'secret': str
-        })
 
         @asyncio.coroutine
         def async_step_init(self, user_input=None):
@@ -237,10 +231,6 @@ def test_get_progress_index(hass, client):
     """Test querying for ."""
     class TestFlow(ConfigFlowHandler):
         VERSION = 5
-        ENTRY_SCHEMA = vol.Schema({
-            'id': str,
-            'token': str
-        })
 
         @asyncio.coroutine
         def async_step_hassio(self, info):
