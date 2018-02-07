@@ -145,13 +145,17 @@ def async_from_config_dict(config: Dict[str, Any],
     _LOGGER.info("Home Assistant core initialized")
 
     # stage 1
-    for component in components & FIRST_INIT_COMPONENT:
+    for component in components:
+        if component not in FIRST_INIT_COMPONENT:
+            continue
         hass.async_add_job(async_setup_component(hass, component, config))
 
     yield from hass.async_block_till_done()
 
     # stage 2
-    for component in components - FIRST_INIT_COMPONENT:
+    for component in components:
+        if component in FIRST_INIT_COMPONENT:
+            continue
         hass.async_add_job(async_setup_component(hass, component, config))
 
     yield from hass.async_block_till_done()
