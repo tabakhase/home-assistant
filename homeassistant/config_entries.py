@@ -339,9 +339,8 @@ class ConfigEntries:
             yield from entry.async_setup(self.hass)
         else:
             # Setting up component will also load the entries
-            self.hass.async_add_job(
-                async_setup_component, self.hass, entry.domain,
-                self._hass_config)
+            yield from async_setup_component(
+                self.hass, entry.domain, self._hass_config)
 
     @callback
     def _async_schedule_save(self):
