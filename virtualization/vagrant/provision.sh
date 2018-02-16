@@ -13,6 +13,12 @@ readonly RUN_UI_DEV_WATCH='/home-assistant/virtualization/vagrant/run_ui_dev_wat
 readonly RUN_UI_TEST='/home-assistant/virtualization/vagrant/run_ui_test'
 readonly RUN_UI_BUILD='/home-assistant/virtualization/vagrant/run_ui_build'
 
+
+## block apt-listchanges
+export APT_LISTCHANGES_FRONTEND=none
+## block "dpkg-preconfigure: unable to re-open stdin: No such file or directory"
+export DEBIAN_FRONTEND=noninteractive
+
 usage() {
     echo '############################################################
 
